@@ -194,11 +194,11 @@ st2 pack install st2
 
 #               "Configure authentication"
 yum -y install httpd-tools
-echo 'Helvetia!2019' | sudo htpasswd -i /etc/st2/htpasswd st2admin
+echo 'Ch@ngeMe' | sudo htpasswd -i /etc/st2/htpasswd st2admin
 vi /etc/st2/st2.conf
 st2ctl restart-component st2api
 st2 auth st2admin
-#export ST2_AUTH_TOKEN=eaf269f877184fed8e1779b4668a05c2
+export ST2_AUTH_TOKEN=$(st2 auth st2admin -p 'Ch@ngeMe' -t)
 st2 action list
 
 #               "WEBUI Install"
