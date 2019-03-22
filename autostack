@@ -111,7 +111,7 @@ fi
 #                                                    Installation: PostgreSQL
 #
 echo "$(date '+%Y-%m-%d %H:%M:%S') - RabbitMQ Install" >> $logfile;
-if [ -z "$(yum search postgresql | grep -i \"No matches found\")" ];then
+if [ -z "$(yum list installed | grep -i postgresql)" ];then
         echo "$(date '+%Y-%m-%d %H:%M:%S') - install rabbitmq (yum)" >> $logfile;
     yum -y install postgresql-server postgresql-contrib postgresql-devel
 #Cleaning, if exist old data folder:
@@ -133,3 +133,86 @@ else
         service postgresql start
         echo "$(date '+%Y-%m-%d %H:%M:%S') - Service postgresql started" >> $logfile;
 fi
+
+#
+#                                                    Installation: Crudini
+#
+echo "$(date '+%Y-%m-%d %H:%M:%S') - CrudINI Install" >> $logfile;
+if [ -z "$(yum list installed | grep -i crudini)" ];then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - install rabbitmq (yum)" >> $logfile;
+    yum -y install crudini
+else
+    echo "CrudINI already installed"
+fi
+
+
+#               SETUP STACKSTORM REPO
+curl -s https://packagecloud.io/install/repositories/StackStorm/stable/script.rpm.sh | sudo bash
+yum install -y st2 st2mistral
+#               SETUP DATA ENCRIPTIOn
+DATASTORE_ENCRYPTION_KEYS_DIRECTORY="/etc/st2/keys"
+DATASTORE_ENCRYPTION_KEY_PATH="${DATASTORE_ENCRYPTION_KEYS_DIRECTORY}/datastore_key.json"
+
+mkdir -p ${DATASTORE_ENCRYPTION_KEYS_DIRECTORY}
+st2-generate-symmetric-crypto-key --key-path ${DATASTORE_ENCRYPTION_KEY_PATH}
+
+chgrp st2 ${DATASTORE_ENCRYPTION_KEYS_DIRECTORY}
+chmod o-r ${DATASTORE_ENCRYPTION_KEYS_DIRECTORY}
+chgrp st2 ${DATASTORE_ENCRYPTION_KEY_PATH}
+chmod o-r ${DATASTORE_ENCRYPTION_KEY_PATH}
+
+crudini --set /etc/st2/st2.conf keyvalue encryption_key_path ${DATASTORE_ENCRYPTION_KEY_PATH}
+
+st2ctl restart-component st2api
+
+cat << EHD | sudo -u postgres psql CREATE ROLE mistral WITH CREATEDB LOGIN ENCRYPTED PASSWORD 'StackStorm'; CREATE DATABASE mistral OWNER mistral; EHD
+/opt/stackstorm/mistral/bin/mistral-db-manage --config-file /etc/mistral/mistral.conf upgrade head
+/opt/stackstorm/mistral/bin/mistral-db-manage --config-file /etc/mistral/mistral.conf populate | grep -v -e openstack -e keystone -e ironicclient
+
+
+useradd stanley
+mkdir -p /home/stanley/.ssh
+chmod 0700 /home/stanley/.ssh
+ssh-keygen -f /home/stanley/.ssh/stanley_rsa -P ""
+sh -c 'cat /home/stanley/.ssh/stanley_rsa.pub >> /home/stanley/.ssh/authorized_keys'
+chown -R stanley:stanley /home/stanley/.ssh
+sh -c 'echo "stanley    ALL=(ALL)       NOPASSWD: SETENV: ALL" >> /etc/sudoers.d/st2'
+chmod 0440 /etc/sudoers.d/st2
+sed -i -r "s/^Defaults\s+\+?requiretty/# Defaults +requiretty/g" /etc/sudoers
+
+#                       "Start Service ST2"
+st2ctl start
+st2ctl reload
+echo "Verify Installation"
+st2 --version
+st2 -h
+st2 action list --pack=core
+st2 run core.local -- date -R
+st2 execution list
+st2 run core.remote hosts='localhost' -- uname -a
+st2 pack install st2
+
+#               "Configure authentication"
+yum -y install httpd-tools
+echo 'Helvetia!2019' | sudo htpasswd -i /etc/st2/htpasswd st2admin
+vi /etc/st2/st2.conf
+st2ctl restart-component st2api
+st2 auth st2admin
+#export ST2_AUTH_TOKEN=eaf269f877184fed8e1779b4668a05c2
+st2 action list
+
+#               "WEBUI Install"
+rpm --import http://nginx.org/keys/nginx_signing.key
+sh -c "cat <<EOT > /etc/yum.repos.d/nginx.repo [nginx] name=nginx repo baseurl=http://nginx.org/packages/rhel/\\\$releasever/x86_64/ gpgcheck=1 enabled=1 
+yum install nginx
+yum install -y st2web
+mkdir -p /etc/ssl/st2
+openssl req -x509 -newkey rsa:2048 -keyout /etc/ssl/st2/st2.key -out /etc/ssl/st2/st2.crt -days 365 -nodes -subj "/C=US/ST=California/L=Palo Alto/O=StackStorm/OU=Information Technology/CN=$(hostname)"
+cp /usr/share/doc/st2/conf/nginx/st2.conf /etc/nginx/conf.d/
+sed -i 's/default_server//g' /etc/nginx/nginx.conf
+systemctl restart nginx
+systemctl enable nginx
+st2 reload
+st2ctl  reload
+
+
