@@ -2,7 +2,7 @@
 #
 #********************************************************************************************************
 #                                                                                                       *
-#                                                  Installazione Stackstorm                             *
+#                                                 Stackstorm                                            *
 #                                                                                                       *
 #********************************************************************************************************
 #
@@ -32,7 +32,7 @@ else echo "Ok! you are 'root'!";echo "USER CHEK-OK" >> $logfile;fi
 echo "**********************************************" >> $logfile
 
 #
-#                                                    Installazione MongoDB"
+#                                                    Installation: MongoDB"
 #
 echo "$(date '+%Y-%m-%d %H:%M:%S') - MongoDB Repository check - START" >> $logfile
 echo "Check MongoDB Dependency:"
@@ -85,7 +85,7 @@ else
 fi
 
 #
-#                                                    Installazione RabbitMQ
+#                                                    Installation: RabbitMQ
 #
 echo "$(date '+%Y-%m-%d %H:%M:%S') - RabbitMQ Install" >> $logfile;
 if [ -z "$(yum search rabbitmq-server | grep -i \"No matches found\")" ];then
@@ -108,7 +108,7 @@ fi
 
 
 #
-#                                                    Installazione PostgreSQL
+#                                                    Installation: PostgreSQL
 #
 echo "$(date '+%Y-%m-%d %H:%M:%S') - RabbitMQ Install" >> $logfile;
 if [ -z "$(yum search postgresql | grep -i \"No matches found\")" ];then
