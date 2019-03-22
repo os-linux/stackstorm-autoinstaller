@@ -6,7 +6,6 @@
 #                                                                                                       *
 #********************************************************************************************************
 #
-#
 #input parameter
 export logfile="/var/log/stackstorm_install.log"
 export adminuser="st2admin"
