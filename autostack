@@ -1,0 +1,136 @@
+#!/bin/bash
+#
+#********************************************************************************************************
+#                                                                                                       *
+#                                                  Installazione Stackstorm                             *
+#                                                                                                       *
+#********************************************************************************************************
+#
+#
+#input parameter
+export logfile="/var/log/stackstorm_install.log"
+export adminuser="st2admin"
+export adminpass="Ch@ngeMe"
+#
+if [ -f $logfile ];then rm -f $logfile;fi
+#
+echo "StackStorm's installation process"
+echo "Installation start on : $(date)" >> $logfile
+echo "**********************************************" >> $logfile
+echo "Administrative user : $adminuser" >> $logfile
+echo "Administrative pass : $adminpass" >> $logfile
+echo "**********************************************" >> $logfile
+echo "$(date '+%Y-%m-%d %H:%M:%S') - START" >> $logfile
+#
+#                                               who i am before to start?
+#
+echo "**********************************************" >> $logfile
+echo "$(date '+%Y-%m-%d %H:%M:%S') - USER CHECK START" >> $logfile
+echo "Who am I? $(whoami)" >> $logfile
+if [ ! $(whoami) = "root" ];then echo "Need to root to start installation process, please become root and restart script!";
+echo "Installation Stopped due NOT-ROOT user" >> $logfile; exit 1;
+else echo "Ok! you are 'root'!";echo "USER CHEK-OK" >> $logfile;fi
+echo "**********************************************" >> $logfile
+
+#
+#                                                    Installazione MongoDB"
+#
+echo "$(date '+%Y-%m-%d %H:%M:%S') - MongoDB Repository check - START" >> $logfile
+echo "Check MongoDB Dependency:"
+if [ ! -z $(yum repolist | grep mongodb) ];then export true_or_false="";
+else export true_or_false=" NOT";
+fi
+echo "MongoDB Repository is$true_or_false Installed";
+echo "MongoDB Repository is$true_or_false Installed" >> $logfile;
+if [ ! -z $true_or_false ];then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Install MongoDB Repository" >> $logfile
+        echo "Install MongoDB Repository"
+        rpm --import https://www.mongodb.org/static/pgp/server-3.4.asc
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - rpm --import https://www.mongodb.org/static/pgp/server-3.4.asc" >> $logfile;
+fi
+if [ ! -f "/etc/yum.repos.d/mongodb-org-3.4.repo" ];then touch "/etc/yum.repos.d/mongodb-org-3.4.repo";fi
+#Writing repo:
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Creating MongoDB Repository - START" >> $logfile;
+echo "[mongodb-org-3.4]" >> /etc/yum.repos.d/mongodb-org-3.4.repo
+echo "name=MongoDB" >> /etc/yum.repos.d/mongodb-org-3.4.repo
+echo "baseurl=https://repo.mongodb.org/yum/redhat/7/mongodb-org/3.4/x86_64/" >> /etc/yum.repos.d/mongodb-org-3.4.repo
+echo "gpgcheck=1" >> /etc/yum.repos.d/mongodb-org-3.4.repo
+echo "enabled=1" >> /etc/yum.repos.d/mongodb-org-3.4.repo
+echo "gpgkey=https://www.mongodb.org/static/pgp/server-3.4.asc " >> /etc/yum.repos.d/mongodb-org-3.4.repo
+if [ -f /etc/yum.repos.d/mongodb-org-3.4.repo ];then echo "$(date '+%Y-%m-%d %H:%M:%S') - MongoDB Repository file- DONE" >> $logfile;
+elif [ -f /etc/yum.repos.d/mongodb-org-3.4.repo ];then echo "$(date '+%Y-%m-%d %H:%M:%S') - MongoDB Repository file - FAILED"; echo " MongoDB Repository - FAILED";exit 1 >> $logfile;
+fi
+#
+#Cleaning repo
+yum clean all
+if [ ! -z "$(yum repolist | grep -i mongodb)" ];then echo "$(date '+%Y-%m-%d %H:%M:%S') - MongoDB Repository yum - present" >> $logfile;
+else echo "$(date '+%Y-%m-%d %H:%M:%S') - MongoDB Repository yum - NOT present" >> $logfile; echo "ERROR :  MongoDB Repository yum - NOT present"; exit 1;
+fi
+#MongoDB Install
+yum install -y mongodb-org
+#verify installation:
+export os_version=$(cat /etc/*release | grep -i pretty_name)
+export version_id=$(cat /etc/*release | grep -i version_id)
+#enable service on-boot
+
+if [ ! -z "$(echo $os_version | grep -i red )" ] || [ ! -z "$(echo $os_version | grep -i centos )" ] && [ ! -z "$(echo $version_id | grep 7)" ];then
+        systemctl enable mongod
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Service mongod enabled" >> $logfile;
+        systemctl start mongod
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Service mongod started" >> $logfile;
+else
+        chkconfig mongod on
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Service mongod enabled" >> $logfile;
+        service mongod start
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Service mongod started" >> $logfile;
+fi
+
+#
+#                                                    Installazione RabbitMQ
+#
+echo "$(date '+%Y-%m-%d %H:%M:%S') - RabbitMQ Install" >> $logfile;
+if [ -z "$(yum search rabbitmq-server | grep -i \"No matches found\")" ];then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - install rabbitmq (yum)" >> $logfile;
+    yum -y install rabbitmq-server
+else
+    echo "RabbitMQ Server already installed"
+fi
+if [ ! -z "$(echo $os_version | grep -i red )" ] || [ ! -z "$(echo $os_version | grep -i centos )" ] && [ ! -z "$(echo $version_id | grep 7)" ];then
+        systemctl enable rabbitmq-server
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Service rabbitmq-server enabled" >> $logfile;
+        systemctl start rabbitmq-server
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Service rabbitmq-server started" >> $logfile;
+else
+        chkconfig rabbitmq-server on
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Service rabbitmq-server enabled" >> $logfile;
+        service rabbitmq-server start
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Service rabbitmq-server started" >> $logfile;
+fi
+
+
+#
+#                                                    Installazione PostgreSQL
+#
+echo "$(date '+%Y-%m-%d %H:%M:%S') - RabbitMQ Install" >> $logfile;
+if [ -z "$(yum search postgresql | grep -i \"No matches found\")" ];then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - install rabbitmq (yum)" >> $logfile;
+    yum -y install postgresql-server postgresql-contrib postgresql-devel
+#Cleaning, if exist old data folder:
+        for j in $(find / -name data | grep sql);do rm -rf $j;done
+        postgresql-setup initdb
+        sed -i "s/\(host.*all.*all.*127.0.0.1\/32.*\)ident/\1md5/" /var/lib/pgsql/data/pg_hba.conf
+        sed -i "s/\(host.*all.*all.*::1\/128.*\)ident/\1md5/" /var/lib/pgsql/data/pg_hba.conf
+else
+    echo "PostgreSQL Server already installed"
+fi
+if [ ! -z "$(echo $os_version | grep -i red )" ] || [ ! -z "$(echo $os_version | grep -i centos )" ] && [ ! -z "$(echo $version_id | grep 7)" ];then
+        systemctl enable postgresql
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Service postgresql enabled" >> $logfile;
+        systemctl start postgresql
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Service postgresql started" >> $logfile;
+else
+        chkconfig postgresql on
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Service postgresql enabled" >> $logfile;
+        service postgresql start
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Service postgresql started" >> $logfile;
+fi
